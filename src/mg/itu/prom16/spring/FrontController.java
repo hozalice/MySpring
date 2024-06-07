@@ -34,7 +34,21 @@ public class FrontController extends HttpServlet {
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
         packageName = config.getInitParameter("packageControllerName"); // Récupération du nom du package
-        scanControllers(packageName);
+        if (packageName== null || packageName.isEmpty()) {
+            throw new ServletException("tsy misy ilay package ilay controlleur");
+        }
+        try {
+            scanControllers(packageName);
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            try {
+                throw new Exception("il y a eu une erreur sur la scan du controlleur");
+            } catch (Exception e1) {
+                // TODO Auto-generated catch block
+                e1.printStackTrace();
+            }
+        }
     }
 
     protected void processRequest(HttpServletRequest request, HttpServletResponse response)
@@ -47,7 +61,7 @@ public class FrontController extends HttpServlet {
         response.setContentType("text/html");
 
         if (!urlMaping.containsKey(controllerSearched)) {
-            out.println("<p>"+"Aucune methode associee a ce chemin."+"</p>");
+            out.println("<p>"+"Aucune methode associee a cette url ou chemin."+"</p>");
         }
         else {
             try {
@@ -74,12 +88,16 @@ public class FrontController extends HttpServlet {
                     }
                     requestDispatcher.forward(request, response);
                 }
+                else{
+                    out.println("erreur de donnée");
+                }
                 String result = (String) returnValue;
         
                 out.println("<p>" + result + "</p>");
                 out.close();
             } catch (Exception e) {
-                e.printStackTrace(); // Gérer l'exception correctement, ne pas laisser vide
+                e.printStackTrace();
+                out.println("something wrong"); // Gérer l'exception correctement, ne pas laisser vide
             }
         }
         
@@ -98,13 +116,16 @@ public class FrontController extends HttpServlet {
         processRequest(request, response);
     }
 
-    private void scanControllers(String packageName) {
+    private void scanControllers(String packageName) throws Exception {
         try {
 
             // Charger le package et parcourir les classes
             ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
             String path = packageName.replace('.', '/');
             URL resource = classLoader.getResource(path);
+            if (resource == null) {
+                throw new ServletException("Ldesolé  le : " + packageName + "n' existe pas");
+            }
             Path classPath = Paths.get(resource.toURI());
             Files.walk(classPath)
                     .filter(f -> f.toString().endsWith(".class"))
@@ -122,16 +143,21 @@ public class FrontController extends HttpServlet {
                                         Mapping mapping =new Mapping(className , m.getName());
                                         AnnotationGet AnnotationGet = m.getAnnotation(AnnotationGet.class);
                                         String annotationValue = AnnotationGet.value();
+                                        if (urlMaping.containsKey(annotationValue)) {
+                                            throw new ServletException(annotationValue +" is duplicate");
+                                        }
                                         urlMaping.put(annotationValue, mapping);
                                     }
                                 }
                             }
-                        } catch (ClassNotFoundException e) {
+                        } catch (ClassNotFoundException | ServletException e) {
                             e.printStackTrace();
+
                         }
                     });
         } catch (Exception e) {
             e.printStackTrace();
+            throw new Exception("tsy mi existe ilay dossier",e);
         }
     }
 

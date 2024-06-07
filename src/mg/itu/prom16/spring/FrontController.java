@@ -11,7 +11,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
+import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletConfig;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
@@ -20,6 +23,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import mg.itu.prom16.annotations.AnnotationGet;
 import mg.itu.prom16.annotations.Annotation_controlleur;
 import mg.itu.prom16.map.Mapping;
+import mg.itu.prom16.map.ModelView;
 
 public class FrontController extends HttpServlet {
     private String packageName; // Variable pour stocker le nom du package
@@ -57,6 +61,19 @@ public class FrontController extends HttpServlet {
                 Method method = class1.getMethod(mapping.getMethodeName());
                 Object declaredObject = class1.getDeclaredConstructor().newInstance();
                 Object returnValue = method.invoke(declaredObject);
+                if (returnValue instanceof String) {
+                    String result = (String) returnValue;
+        
+                    out.println("<p>" + result + "</p>");
+                }
+                else if (returnValue instanceof ModelView) {
+                    ModelView modelView= (ModelView)returnValue;
+                    RequestDispatcher requestDispatcher = request.getRequestDispatcher(modelView.getNameView());
+                    for(Entry<String, Object> entry : modelView.getListeview().entrySet()){
+                        request.setAttribute(entry.getKey(), entry.getValue());
+                    }
+                    requestDispatcher.forward(request, response);
+                }
                 String result = (String) returnValue;
         
                 out.println("<p>" + result + "</p>");

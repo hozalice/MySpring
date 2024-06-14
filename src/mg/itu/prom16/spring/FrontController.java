@@ -2,8 +2,10 @@ package mg.itu.prom16.spring;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Parameter;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,7 +23,9 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import mg.itu.prom16.annotations.AnnotationGet;
+import mg.itu.prom16.annotations.AnnotationPost;
 import mg.itu.prom16.annotations.Annotation_controlleur;
+import mg.itu.prom16.annotations.Param;
 import mg.itu.prom16.map.Mapping;
 import mg.itu.prom16.map.ModelView;
 
@@ -51,6 +55,13 @@ public class FrontController extends HttpServlet {
         }
     }
 
+    /**
+     * @param request
+     * @param response
+     * @throws ServletException
+     * @throws IOException
+     */
+    @SuppressWarnings("unused")
     protected void processRequest(HttpServletRequest request, HttpServletResponse response)
     throws ServletException, IOException {
         StringBuffer requestURL = request.getRequestURL();
@@ -75,9 +86,33 @@ public class FrontController extends HttpServlet {
                 Method method = class1.getMethod(mapping.getMethodeName());
                 Object declaredObject = class1.getDeclaredConstructor().newInstance();
                 Object returnValue = method.invoke(declaredObject);
-                if (returnValue instanceof String) {
+                Method method1 = null;
+
+                // Find the method that matches the request type (GET or POST)
+                for (Method m : class1.getDeclaredMethods()) {
+                    if (m.getName().equals(mapping.getMethodeName())) {
+                        if (request.getMethod().equalsIgnoreCase("GET") && m.isAnnotationPresent((Class<? extends Annotation>) AnnotationGet.class)) {
+                            method1 = m;
+                            break;
+                        } else if (request.getMethod().equalsIgnoreCase("POST") && m.isAnnotationPresent((Class<? extends Annotation>) AnnotationPost.class)) {
+                            method1 = m;
+                            break;
+                        }
+                    }
+                }
+
+                if (method == null) {
+                    out.println("<p>Aucune méthode correspondante trouvée.</p>");
+                    return;
+                }
+
+                // Inject parameters
+                final Object[] parameters = getMethodParameters(method, request);
+                
+                Object object = class1.getDeclaredConstructor().newInstance();
+                Object returnValue1 = method.invoke(object, parameters);
+                if (returnValue1 instanceof String) {
                     String result = (String) returnValue;
-        
                     out.println("<p>" + result + "</p>");
                 }
                 else if (returnValue instanceof ModelView) {
@@ -138,21 +173,32 @@ public class FrontController extends HttpServlet {
                                 controllerNames.add(clazz.getSimpleName());
                                 Method[] methods= clazz.getMethods();
 
-                                for(Method m : methods){
-                                    if(m.isAnnotationPresent(AnnotationGet.class)){
-                                        Mapping mapping =new Mapping(className , m.getName());
-                                        AnnotationGet AnnotationGet = m.getAnnotation(AnnotationGet.class);
-                                        String annotationValue = AnnotationGet.value();
-                                        if (urlMaping.containsKey(annotationValue)) {
-                                            throw new ServletException(annotationValue +" is duplicate");
+                                for (Method methode : methods) {
+                                    if (methode.isAnnotationPresent(AnnotationGet.class)) {
+                                        Mapping map = new Mapping(className, methode.getName());
+                                        String valeur = methode.getAnnotation(AnnotationGet.class).value();
+                                        if (urlMaping.containsKey(valeur)) {
+                                            throw new Exception("double url" + valeur);
+                                        } else {
+                                            urlMaping.put(valeur, map);
                                         }
-                                        urlMaping.put(annotationValue, mapping);
+                                    } else if (methode.isAnnotationPresent(AnnotationGet.class)) {
+                                        Mapping map = new Mapping(className, methode.getName());
+                                        String valeur = methode.getAnnotation(AnnotationPost.class).value();
+                                        if (urlMaping.containsKey(valeur)) {
+                                            throw new Exception("double url" + valeur);
+                                        } else {
+                                            urlMaping.put(valeur, map);
+                                        }
                                     }
                                 }
                             }
                         } catch (ClassNotFoundException | ServletException e) {
                             e.printStackTrace();
 
+                        } catch (Exception e) {
+                            // TODO Auto-generated catch block
+                            e.printStackTrace();
                         }
                     });
         } catch (Exception e) {
@@ -160,6 +206,20 @@ public class FrontController extends HttpServlet {
             throw new Exception("tsy mi existe ilay dossier",e);
         }
     }
+    private Object[] getMethodParameters(Method method, HttpServletRequest request) {
+        Parameter[] parameters = method.getParameters();
+        Object[] parameterValues = new Object[parameters.length];
 
+        for (int i = 0; i < parameters.length; i++) {
+            if (parameters[i].isAnnotationPresent(Param.class)) {
+                Param param = parameters[i].getAnnotation(Param.class);
+                String paramValue = request.getParameter(param.value());
+                parameterValues[i] = paramValue; // Assuming all parameters are strings for simplicity
+            }
+        }
+
+        return parameterValues;
+    }
+    
 }
 

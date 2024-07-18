@@ -3,29 +3,23 @@ package mg.itu.prom16.map;
 import java.util.HashMap;
 
 public class ModelView {
-    String nameView;
-    HashMap<String,Object> listeview=new HashMap<>();
-    public ModelView(String nameView, HashMap<String, Object> listeview) {
-        this.nameView = nameView;
-        this.listeview = listeview;
-    }
-    public ModelView(){
+    private String url;
+    private HashMap<String, Object> data;
 
+    public ModelView(String url) {
+        this.url = url;
+        this.data = new HashMap<>();
     }
-    public String getNameView() {
-        return nameView;
+
+    public void addObject(String name, Object value) {
+        data.put(name, value);
     }
-    public void setNameView(String nameView) {
-        this.nameView = nameView;
+
+    public String getUrl() {
+        return url;
     }
-    public HashMap<String, Object> getListeview() {
-        return listeview;
+
+    public HashMap<String, Object> getData() {
+        return data;
     }
-    public void setListeview(HashMap<String, Object> listeview) {
-        this.listeview = listeview;
-    }
-    public void addObject(String anarany , Object viewassocier){
-        listeview.put(anarany, viewassocier);
-    }
-    
 }

@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
+import com.google.gson.Gson;
 import jakarta.servlet.ServletConfig;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletException;
@@ -28,6 +28,7 @@ import mg.itu.prom16.annotations.Annotation_controlleur;
 import mg.itu.prom16.annotations.Param;
 import mg.itu.prom16.annotations.ParamField;
 import mg.itu.prom16.annotations.ParamObject;
+import mg.itu.prom16.annotations.Restapi;
 import mg.itu.prom16.map.ModelView;
 import mg.itu.prom16.session.MySession;
 import mg.itu.prom16.map.Mapping;
@@ -54,54 +55,72 @@ public class FrontServlet extends HttpServlet {
         }
     }
 
-    protected void processRequest(HttpServletRequest request, HttpServletResponse response)
-            throws Exception {
+    protected void processRequest(HttpServletRequest request, HttpServletResponse response) throws Exception {
         StringBuffer requestURL = request.getRequestURL();
         String[] requestUrlSplitted = requestURL.toString().split("/");
         String controllerSearched = requestUrlSplitted[requestUrlSplitted.length - 1];
 
         PrintWriter out = response.getWriter();
-        response.setContentType("text/html");
-        if (!error.isEmpty()) {
-            out.println(error);
-        } else if (!urlMaping.containsKey(controllerSearched)) {
-            out.println("<p>Aucune methode associee à ce chemin.</p>");
-        } else {
-            try {
-                Mapping mapping = urlMaping.get(controllerSearched);
-                Class<?> clazz = Class.forName(mapping.getClassName());
-                Object object = clazz.getDeclaredConstructor().newInstance();
-                Method method = null;
 
-                for (Method m : clazz.getDeclaredMethods()) {
-                    if (m.getName().equals(mapping.getMethodeName())) {
-                        if (request.getMethod().equalsIgnoreCase("GET")
-                                && m.isAnnotationPresent(Annotation_Get.class)) {
-                            method = m;
-                            break;
-                        } else if (request.getMethod().equalsIgnoreCase("POST")
-                                && m.isAnnotationPresent(Annotation_Post.class)) {
-                            method = m;
-                            break;
-                        }
+        if (!error.isEmpty()) {
+            response.setContentType("text/html");
+            out.println(error);
+            return;
+        }
+
+        if (!urlMaping.containsKey(controllerSearched)) {
+            response.setContentType("text/html");
+            out.println("<p>Aucune méthode associée à ce chemin.</p>");
+            return;
+        }
+
+        try {
+            Mapping mapping = urlMaping.get(controllerSearched);
+            Class<?> clazz = Class.forName(mapping.getClassName());
+            Object object = clazz.getDeclaredConstructor().newInstance();
+            Method method = null;
+
+            for (Method m : clazz.getDeclaredMethods()) {
+                if (m.getName().equals(mapping.getMethodeName())) {
+                    if (request.getMethod().equalsIgnoreCase("GET") && m.isAnnotationPresent(Annotation_Get.class)) {
+                        method = m;
+                        break;
+                    } else if (request.getMethod().equalsIgnoreCase("POST")
+                            && m.isAnnotationPresent(Annotation_Post.class)) {
+                        method = m;
+                        break;
                     }
                 }
+            }
 
-                if (method == null) {
-                    out.println("<p>Aucune méthode correspondante trouvée.</p>");
-                    return;
+            if (method == null) {
+                response.setContentType("text/html");
+                out.println("<p>Aucune méthode correspondante trouvée.</p>");
+                return;
+            }
+
+            injectSession(request, object);
+
+            Object[] parameters = getMethodParameters(method, request);
+            Object returnValue = method.invoke(object, parameters);
+
+            // Nouvelle vérification pour l'annotation Restapi
+            if (method.isAnnotationPresent(Restapi.class)) {
+                response.setContentType("application/json");
+
+                Gson gson = new Gson();
+                String jsonResponse;
+
+                if (returnValue instanceof ModelView) {
+                    ModelView modelView = (ModelView) returnValue;
+                    jsonResponse = gson.toJson(modelView.getData());
+                } else {
+                    jsonResponse = gson.toJson(returnValue);
                 }
 
-                // Inject session into the controller if it has a MySession parameter
-                injectSession(request, object);
-
-                // Inject parameters
-                Object[] parameters = getMethodParameters(method, request);
-                Object returnValue = method.invoke(object, parameters);
-
-                if (returnValue instanceof String) {
-                    out.println("Methode trouvee dans " + (String) returnValue);
-                } else if (returnValue instanceof ModelView) {
+                out.print(jsonResponse);
+            } else {
+                if (returnValue instanceof ModelView) {
                     ModelView modelView = (ModelView) returnValue;
                     for (Map.Entry<String, Object> entry : modelView.getData().entrySet()) {
                         request.setAttribute(entry.getKey(), entry.getValue());
@@ -109,13 +128,15 @@ public class FrontServlet extends HttpServlet {
                     RequestDispatcher dispatcher = request.getRequestDispatcher(modelView.getUrl());
                     dispatcher.forward(request, response);
                 } else {
-                    out.println("Type de donnees non reconnu");
+                    response.setContentType("text/html");
+                    out.println("Type de données non reconnu");
                 }
-            } catch (Exception e) {
-                out.println(e.getMessage());
-            } finally {
-                out.close();
             }
+        } catch (Exception e) {
+            response.setContentType("text/html");
+            out.println(e.getMessage());
+        } finally {
+            out.close();
         }
     }
 

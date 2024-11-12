@@ -68,30 +68,17 @@ public class FrontServlet extends HttpServlet {
             return;
         }
 
-        if (!urlMaping.containsKey(controllerSearched)) {
+        if (!urlMaping.containsKey(controllerSearched + request.getMethod())) {
             response.setContentType("text/html");
-            out.println("<p>Aucune méthode associée à ce chemin.</p>");
+            out.println("<p>Aucune méthode associée à ce chemin ou méthode incorrecte.</p>");
             return;
         }
 
         try {
-            Mapping mapping = urlMaping.get(controllerSearched);
+            Mapping mapping = urlMaping.get(controllerSearched + request.getMethod());
             Class<?> clazz = Class.forName(mapping.getClassName());
             Object object = clazz.getDeclaredConstructor().newInstance();
-            Method method = null;
-
-            for (Method m : clazz.getDeclaredMethods()) {
-                if (m.getName().equals(mapping.getMethodeName())) {
-                    if (request.getMethod().equalsIgnoreCase("GET") && m.isAnnotationPresent(Annotation_Get.class)) {
-                        method = m;
-                        break;
-                    } else if (request.getMethod().equalsIgnoreCase("POST")
-                            && m.isAnnotationPresent(Annotation_Post.class)) {
-                        method = m;
-                        break;
-                    }
-                }
-            }
+            Method method = clazz.getDeclaredMethod(mapping.getMethodeName(), HttpServletRequest.class);
 
             if (method == null) {
                 response.setContentType("text/html");
@@ -104,20 +91,12 @@ public class FrontServlet extends HttpServlet {
             Object[] parameters = getMethodParameters(method, request);
             Object returnValue = method.invoke(object, parameters);
 
-            // Nouvelle vérification pour l'annotation Restapi
+            // Retour JSON ou ModelView
             if (method.isAnnotationPresent(Restapi.class)) {
                 response.setContentType("application/json");
-
                 Gson gson = new Gson();
-                String jsonResponse;
-
-                if (returnValue instanceof ModelView) {
-                    ModelView modelView = (ModelView) returnValue;
-                    jsonResponse = gson.toJson(modelView.getData());
-                } else {
-                    jsonResponse = gson.toJson(returnValue);
-                }
-
+                String jsonResponse = gson
+                        .toJson(returnValue instanceof ModelView ? ((ModelView) returnValue).getData() : returnValue);
                 out.print(jsonResponse);
             } else {
                 if (returnValue instanceof ModelView) {
@@ -169,9 +148,9 @@ public class FrontServlet extends HttpServlet {
             String path = packageName.replace('.', '/');
             URL resource = classLoader.getResource(path);
 
-            // Verification si le package n'existe pas
+            // Vérification si le package n'existe pas
             if (resource == null) {
-                throw new Exception("Le package specifie n'existe pas: " + packageName);
+                throw new Exception("Le package spécifié n'existe pas: " + packageName);
             }
 
             Path classPath = Paths.get(resource.toURI());
@@ -186,22 +165,25 @@ public class FrontServlet extends HttpServlet {
                                 controllerNames.add(clazz.getSimpleName());
                                 Method[] methods = clazz.getMethods();
 
-                                for (Method methode : methods) {
-                                    if (methode.isAnnotationPresent(Annotation_Get.class)) {
-                                        Mapping map = new Mapping(className, methode.getName());
-                                        String valeur = methode.getAnnotation(Annotation_Get.class).value();
-                                        if (urlMaping.containsKey(valeur)) {
-                                            throw new Exception("double url" + valeur);
+                                for (Method method : methods) {
+                                    String url = null;
+                                    String verb = "GET"; // Valeur par défaut
+
+                                    if (method.isAnnotationPresent(Annotation_Get.class)) {
+                                        url = method.getAnnotation(Annotation_Get.class).value();
+                                        verb = "GET"; // GET si annoté par @GET
+                                    } else if (method.isAnnotationPresent(Annotation_Post.class)) {
+                                        url = method.getAnnotation(Annotation_Post.class).value();
+                                        verb = "POST"; // POST si annoté par @POST
+                                    }
+
+                                    if (url != null) {
+                                        if (urlMaping.containsKey(url + verb)) {
+                                            throw new Exception("Conflit d'URL : l'URL " + url
+                                                    + " est déjà associée à une méthode " + verb);
                                         } else {
-                                            urlMaping.put(valeur, map);
-                                        }
-                                    } else if (methode.isAnnotationPresent(Annotation_Post.class)) {
-                                        Mapping map = new Mapping(className, methode.getName());
-                                        String valeur = methode.getAnnotation(Annotation_Post.class).value();
-                                        if (urlMaping.containsKey(valeur)) {
-                                            throw new Exception("double url" + valeur);
-                                        } else {
-                                            urlMaping.put(valeur, map);
+                                            urlMaping.put(url + verb,
+                                                    new Mapping(className, method.getName(), url, verb));
                                         }
                                     }
                                 }

@@ -9,5 +9,5 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Annotation_Post {
-    String value();
+    String value() default ""; // URL associée à la méthode POST
 }

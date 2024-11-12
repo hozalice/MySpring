@@ -1,12 +1,16 @@
 package mg.itu.prom16.map;
 
 public class Mapping {
-    String className;
-    String methodeName;
+    private String className;
+    private String methodeName;
+    private String url;
+    private String verb;
 
-    public Mapping(String className, String methodeName) {
+    public Mapping(String className, String methodName, String url, String verb) {
         this.className = className;
-        this.methodeName = methodeName;
+        this.methodeName = methodName;
+        this.url = url;
+        this.verb = verb;
     }
 
     public String getClassName() {

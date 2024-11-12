@@ -55,67 +55,69 @@ public class FrontServlet extends HttpServlet {
     }
 
     protected void processRequest(HttpServletRequest request, HttpServletResponse response)
-    throws Exception {
-StringBuffer requestURL = request.getRequestURL();
-String[] requestUrlSplitted = requestURL.toString().split("/");
-String controllerSearched = requestUrlSplitted[requestUrlSplitted.length - 1];
+            throws Exception {
+        StringBuffer requestURL = request.getRequestURL();
+        String[] requestUrlSplitted = requestURL.toString().split("/");
+        String controllerSearched = requestUrlSplitted[requestUrlSplitted.length - 1];
 
-PrintWriter out = response.getWriter();
-response.setContentType("text/html");
-if (!error.isEmpty()) {
-    out.println(error);
-} else if (!urlMaping.containsKey(controllerSearched)) {
-    out.println("<p>Aucune methode associee à ce chemin.</p>");
-} else {
-    try {
-        Mapping mapping = urlMaping.get(controllerSearched);
-        Class<?> clazz = Class.forName(mapping.getClassName());
-        Object object = clazz.getDeclaredConstructor().newInstance();
-        Method method = null;
-
-        for (Method m : clazz.getDeclaredMethods()) {
-            if (m.getName().equals(mapping.getMethodeName())) {
-                if (request.getMethod().equalsIgnoreCase("GET") && m.isAnnotationPresent(Annotation_Get.class)) {
-                    method = m;
-                    break;
-                } else if (request.getMethod().equalsIgnoreCase("POST") && m.isAnnotationPresent(Annotation_Post.class)) {
-                    method = m;
-                    break;
-                }
-            }
-        }
-
-        if (method == null) {
-            out.println("<p>Aucune méthode correspondante trouvée.</p>");
-            return;
-        }
-
-        // Inject session into the controller if it has a MySession parameter
-        injectSession(request, object);
-
-        // Inject parameters
-        Object[] parameters = getMethodParameters(method, request);
-        Object returnValue = method.invoke(object, parameters);
-
-        if (returnValue instanceof String) {
-            out.println("Methode trouvee dans " + (String) returnValue);
-        } else if (returnValue instanceof ModelView) {
-            ModelView modelView = (ModelView) returnValue;
-            for (Map.Entry<String, Object> entry : modelView.getData().entrySet()) {
-                request.setAttribute(entry.getKey(), entry.getValue());
-            }
-            RequestDispatcher dispatcher = request.getRequestDispatcher(modelView.getUrl());
-            dispatcher.forward(request, response);
+        PrintWriter out = response.getWriter();
+        response.setContentType("text/html");
+        if (!error.isEmpty()) {
+            out.println(error);
+        } else if (!urlMaping.containsKey(controllerSearched)) {
+            out.println("<p>Aucune methode associee à ce chemin.</p>");
         } else {
-            out.println("Type de donnees non reconnu");
+            try {
+                Mapping mapping = urlMaping.get(controllerSearched);
+                Class<?> clazz = Class.forName(mapping.getClassName());
+                Object object = clazz.getDeclaredConstructor().newInstance();
+                Method method = null;
+
+                for (Method m : clazz.getDeclaredMethods()) {
+                    if (m.getName().equals(mapping.getMethodeName())) {
+                        if (request.getMethod().equalsIgnoreCase("GET")
+                                && m.isAnnotationPresent(Annotation_Get.class)) {
+                            method = m;
+                            break;
+                        } else if (request.getMethod().equalsIgnoreCase("POST")
+                                && m.isAnnotationPresent(Annotation_Post.class)) {
+                            method = m;
+                            break;
+                        }
+                    }
+                }
+
+                if (method == null) {
+                    out.println("<p>Aucune méthode correspondante trouvée.</p>");
+                    return;
+                }
+
+                // Inject session into the controller if it has a MySession parameter
+                injectSession(request, object);
+
+                // Inject parameters
+                Object[] parameters = getMethodParameters(method, request);
+                Object returnValue = method.invoke(object, parameters);
+
+                if (returnValue instanceof String) {
+                    out.println("Methode trouvee dans " + (String) returnValue);
+                } else if (returnValue instanceof ModelView) {
+                    ModelView modelView = (ModelView) returnValue;
+                    for (Map.Entry<String, Object> entry : modelView.getData().entrySet()) {
+                        request.setAttribute(entry.getKey(), entry.getValue());
+                    }
+                    RequestDispatcher dispatcher = request.getRequestDispatcher(modelView.getUrl());
+                    dispatcher.forward(request, response);
+                } else {
+                    out.println("Type de donnees non reconnu");
+                }
+            } catch (Exception e) {
+                out.println(e.getMessage());
+            } finally {
+                out.close();
+            }
         }
-    } catch (Exception e) {
-        out.println(e.getMessage());
-    } finally {
-        out.close();
     }
-}
-}
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
@@ -192,7 +194,7 @@ if (!error.isEmpty()) {
         }
     }
 
-  public static Object convertParameter(String value, Class<?> type) {
+    public static Object convertParameter(String value, Class<?> type) {
         if (value == null) {
             return null;
         }
@@ -209,72 +211,73 @@ if (!error.isEmpty()) {
         return null;
     }
 
- private Object[] getMethodParameters(Method method, HttpServletRequest request) throws Exception {
-    Parameter[] parameters = method.getParameters();
-    Object[] parameterValues = new Object[parameters.length];
+    private Object[] getMethodParameters(Method method, HttpServletRequest request) throws Exception {
+        Parameter[] parameters = method.getParameters();
+        Object[] parameterValues = new Object[parameters.length];
 
-    for (int i = 0; i < parameters.length; i++) {
-        // Si le paramètre est annoté avec @Param
-        if (parameters[i].isAnnotationPresent(Param.class)) {
-            Param param = parameters[i].getAnnotation(Param.class);
-            String paramValue = request.getParameter(param.value());
-            parameterValues[i] = convertParameter(paramValue, parameters[i].getType());
-        }
-        // Si le paramètre est annoté avec @ParamObject (création d'objet)
-        else if (parameters[i].isAnnotationPresent(ParamObject.class)) {
-            Class<?> parameterType = parameters[i].getType();
-            Object parameterObject = parameterType.getDeclaredConstructor().newInstance();
-
-            // Parcourir les champs de l'objet pour injecter les valeurs des paramètres
-            for (Field field : parameterType.getDeclaredFields()) {
-                ParamField param = field.getAnnotation(ParamField.class);
-                String fieldName = field.getName();
-                if (param == null) {
-                    throw new Exception("L'attribut " + fieldName + " dans la classe " + parameterObject.getClass().getSimpleName() + " n'a pas d'annotation ParamField.");
-                }
-                String paramName = param.value();
-                String paramValue = request.getParameter(paramName);
-
-                if (paramValue != null) {
-                    Object convertedValue = convertParameter(paramValue, field.getType());
-
-                    // Construire et appeler le setter pour le champ de l'objet
-                    String setterName = "set" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
-                    Method setter = parameterType.getMethod(setterName, field.getType());
-                    setter.invoke(parameterObject, convertedValue);
-                }
+        for (int i = 0; i < parameters.length; i++) {
+            // Si le paramètre est annoté avec @Param
+            if (parameters[i].isAnnotationPresent(Param.class)) {
+                Param param = parameters[i].getAnnotation(Param.class);
+                String paramValue = request.getParameter(param.value());
+                parameterValues[i] = convertParameter(paramValue, parameters[i].getType());
             }
-            parameterValues[i] = parameterObject;
+            // Si le paramètre est annoté avec @ParamObject (création d'objet)
+            else if (parameters[i].isAnnotationPresent(ParamObject.class)) {
+                Class<?> parameterType = parameters[i].getType();
+                Object parameterObject = parameterType.getDeclaredConstructor().newInstance();
+
+                // Parcourir les champs de l'objet pour injecter les valeurs des paramètres
+                for (Field field : parameterType.getDeclaredFields()) {
+                    ParamField param = field.getAnnotation(ParamField.class);
+                    String fieldName = field.getName();
+                    if (param == null) {
+                        throw new Exception("L'attribut " + fieldName + " dans la classe "
+                                + parameterObject.getClass().getSimpleName() + " n'a pas d'annotation ParamField.");
+                    }
+                    String paramName = param.value();
+                    String paramValue = request.getParameter(paramName);
+
+                    if (paramValue != null) {
+                        Object convertedValue = convertParameter(paramValue, field.getType());
+
+                        // Construire et appeler le setter pour le champ de l'objet
+                        String setterName = "set" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+                        Method setter = parameterType.getMethod(setterName, field.getType());
+                        setter.invoke(parameterObject, convertedValue);
+                    }
+                }
+                parameterValues[i] = parameterObject;
+            }
+            // Si le paramètre est de type MySession, injecter l'objet session
+            else if (parameters[i].getType().equals(MySession.class)) {
+                parameterValues[i] = new MySession(request.getSession());
+            }
+            // Ajouter d'autres vérifications ici si nécessaire pour d'autres types
+            // d'annotations
+            else {
+                parameterValues[i] = null; // Par défaut, si aucun paramètre n'est trouvé
+            }
         }
-        // Si le paramètre est de type MySession, injecter l'objet session
-        else if (parameters[i].getType().equals(MySession.class)) {
-            parameterValues[i] = new MySession(request.getSession());
-        }
-        // Ajouter d'autres vérifications ici si nécessaire pour d'autres types d'annotations
-        else {
-            parameterValues[i] = null; // Par défaut, si aucun paramètre n'est trouvé
-        }
+
+        return parameterValues;
     }
 
-    return parameterValues;
-}
-public static void injectSession(HttpServletRequest req, Object controller) {
-    try {
-        // Récupérer la méthode setSession si elle existe dans le contrôleur
-        Method setSessionMethod = controller.getClass().getMethod("setSession", MySession.class);
-        
-        // Si la méthode existe, l'invoquer avec une nouvelle instance de MySession
-        if (setSessionMethod != null) {
-            MySession mySession = new MySession(req.getSession());
-            setSessionMethod.invoke(controller, mySession);
+    public static void injectSession(HttpServletRequest req, Object controller) {
+        try {
+            // Récupérer la méthode setSession si elle existe dans le contrôleur
+            Method setSessionMethod = controller.getClass().getMethod("setSession", MySession.class);
+
+            // Si la méthode existe, l'invoquer avec une nouvelle instance de MySession
+            if (setSessionMethod != null) {
+                MySession mySession = new MySession(req.getSession());
+                setSessionMethod.invoke(controller, mySession);
+            }
+        } catch (NoSuchMethodException e) {
+            // La méthode setSession n'existe pas dans ce contrôleur, ignorer
+        } catch (Exception e) {
+            e.printStackTrace(); // Gérer les autres exceptions éventuelles
         }
-    } catch (NoSuchMethodException e) {
-        // La méthode setSession n'existe pas dans ce contrôleur, ignorer
-    } catch (Exception e) {
-        e.printStackTrace(); // Gérer les autres exceptions éventuelles
     }
-}
-
-
 
 }

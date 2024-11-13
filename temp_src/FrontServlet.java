@@ -60,17 +60,14 @@ public class FrontServlet extends HttpServlet {
         String[] requestUrlSplitted = requestURL.toString().split("/");
         String controllerSearched = requestUrlSplitted[requestUrlSplitted.length - 1];
 
-        PrintWriter out = response.getWriter();
-
         if (!error.isEmpty()) {
-            response.setContentType("text/html");
-            out.println(error);
+            displayErrorPage(response, HttpServletResponse.SC_BAD_REQUEST, error);
             return;
         }
 
         if (!urlMaping.containsKey(controllerSearched + request.getMethod())) {
-            response.setContentType("text/html");
-            out.println("<p>Aucune méthode associée à ce chemin ou méthode incorrecte.</p>");
+            displayErrorPage(response, HttpServletResponse.SC_NOT_FOUND,
+                    "Aucune méthode associée à ce chemin ou méthode incorrecte.");
             return;
         }
 
@@ -81,8 +78,7 @@ public class FrontServlet extends HttpServlet {
             Method method = clazz.getDeclaredMethod(mapping.getMethodeName(), HttpServletRequest.class);
 
             if (method == null) {
-                response.setContentType("text/html");
-                out.println("<p>Aucune méthode correspondante trouvée.</p>");
+                displayErrorPage(response, HttpServletResponse.SC_NOT_FOUND, "Aucune méthode correspondante trouvée.");
                 return;
             }
 
@@ -91,12 +87,12 @@ public class FrontServlet extends HttpServlet {
             Object[] parameters = getMethodParameters(method, request);
             Object returnValue = method.invoke(object, parameters);
 
-            // Retour JSON ou ModelView
             if (method.isAnnotationPresent(Restapi.class)) {
                 response.setContentType("application/json");
                 Gson gson = new Gson();
                 String jsonResponse = gson
                         .toJson(returnValue instanceof ModelView ? ((ModelView) returnValue).getData() : returnValue);
+                PrintWriter out = response.getWriter();
                 out.print(jsonResponse);
             } else {
                 if (returnValue instanceof ModelView) {
@@ -107,15 +103,13 @@ public class FrontServlet extends HttpServlet {
                     RequestDispatcher dispatcher = request.getRequestDispatcher(modelView.getUrl());
                     dispatcher.forward(request, response);
                 } else {
-                    response.setContentType("text/html");
-                    out.println("Type de données non reconnu");
+                    displayErrorPage(response, HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE,
+                            "Type de données non reconnu.");
                 }
             }
         } catch (Exception e) {
-            response.setContentType("text/html");
-            out.println(e.getMessage());
-        } finally {
-            out.close();
+            displayErrorPage(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                    "Erreur du serveur : " + e.getMessage());
         }
     }
 
@@ -281,6 +275,18 @@ public class FrontServlet extends HttpServlet {
         } catch (Exception e) {
             e.printStackTrace(); // Gérer les autres exceptions éventuelles
         }
+    }
+
+    // Fonction pour afficher une page d'erreur
+    private void displayErrorPage(HttpServletResponse response, int errorCode, String errorMessage) throws IOException {
+        response.setStatus(errorCode);
+        response.setContentType("text/html");
+        PrintWriter out = response.getWriter();
+        out.println("<html><head><title>Error</title></head><body>");
+        out.println("<h1>Erreur " + errorCode + "</h1>");
+        out.println("<p>" + errorMessage + "</p>");
+        out.println("</body></html>");
+        out.close();
     }
 
 }

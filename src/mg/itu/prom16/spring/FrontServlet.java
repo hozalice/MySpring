@@ -1,6 +1,9 @@
 package mg.itu.prom16.spring;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -22,6 +25,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.Part;
 import mg.itu.prom16.annotations.Annotation_Get;
 import mg.itu.prom16.annotations.Annotation_Post;
 import mg.itu.prom16.annotations.Annotation_controlleur;
@@ -82,6 +86,7 @@ public class FrontServlet extends HttpServlet {
                 return;
             }
 
+            
             injectSession(request, object);
 
             Object[] parameters = getMethodParameters(method, request);
@@ -216,8 +221,15 @@ public class FrontServlet extends HttpServlet {
             // Si le paramètre est annoté avec @Param
             if (parameters[i].isAnnotationPresent(Param.class)) {
                 Param param = parameters[i].getAnnotation(Param.class);
-                String paramValue = request.getParameter(param.value());
-                parameterValues[i] = convertParameter(paramValue, parameters[i].getType());
+                if (parameters[i].getType() == Part.class) {
+                    Part file = request.getPart(param.value());
+                    upload(file);
+                    parameterValues[i] = file;
+                } else {
+                    String paramValue = request.getParameter(param.value());
+                    parameterValues[i] = convertParameter(paramValue, parameters[i].getType()); // Assuming all
+                                                                                                // parameters
+                }
             }
             // Si le paramètre est annoté avec @ParamObject (création d'objet)
             else if (parameters[i].isAnnotationPresent(ParamObject.class)) {
@@ -287,6 +299,27 @@ public class FrontServlet extends HttpServlet {
         out.println("<p>" + errorMessage + "</p>");
         out.println("</body></html>");
         out.close();
+    }
+
+    public void upload(Part filePart) throws Exception {
+        // Obtenir le nom de fichier
+        String fileName = filePart.getSubmittedFileName();
+
+        // Chemin où vous souhaitez enregistrer le fichier
+        String uploadPath = "D:/ITU/S5/upload/" + fileName;
+
+        // Lire le fichier et le stocker
+        try (InputStream fileContent = filePart.getInputStream();
+                FileOutputStream fos = new FileOutputStream(new File(uploadPath))) {
+
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = fileContent.read(buffer)) != -1) {
+                fos.write(buffer, 0, bytesRead);
+            }
+        } catch (Exception e) {
+            throw new Exception("Erreur lors du téléchargement : " + e.getMessage());
+        }
     }
 
 }

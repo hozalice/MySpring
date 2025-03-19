@@ -371,7 +371,7 @@ public class FrontServlet extends HttpServlet {
                     ParamField param = field.getAnnotation(ParamField.class);
                     String fieldName = field.getName();  // Recupere le nom du champ
                     if (param == null) {
-                        throw new Exception("Etu002635 ,l'attribut " + fieldName +" dans le classe "+parameterObject.getClass().getSimpleName()+" n'a pas d'annotation ParamField "); 
+                        throw new Exception("Etu002748 ,l'attribut " + fieldName +" dans le classe "+parameterObject.getClass().getSimpleName()+" n'a pas d'annotation ParamField "); 
                     }  
                     String paramName = param.value();
                     String paramValue = request.getParameter(paramName);  // Recupere la valeur du parametre de la requete                      

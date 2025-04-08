@@ -9,3 +9,9 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 public @interface RestApi {
 }
+creer certificat  sysrt cert mang
+services : squid proxy serveur
+local cachee
+general
+acl
+export certificat

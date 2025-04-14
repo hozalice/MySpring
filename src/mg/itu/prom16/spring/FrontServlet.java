@@ -73,7 +73,7 @@ public class FrontServlet extends HttpServlet {
     }
 
     protected void processRequest(HttpServletRequest request, HttpServletResponse response)
-        throws Exception {
+            throws Exception {
         StringBuffer requestURL = request.getRequestURL();
         String[] requestUrlSplitted = requestURL.toString().split("/");
         String controllerSearched = requestUrlSplitted[requestUrlSplitted.length - 1];
@@ -121,7 +121,8 @@ public class FrontServlet extends HttpServlet {
             // Verification de l'existence de la methode correspondante
             for (Method m : clazz.getDeclaredMethods()) {
                 for (VerbAction action : mapping.getVerbActions()) {
-                    if (m.getName().equals(action.getMethodeName()) && action.getVerb().equalsIgnoreCase(request.getMethod())) {
+                    if (m.getName().equals(action.getMethodeName())
+                            && action.getVerb().equalsIgnoreCase(request.getMethod())) {
                         method = m;
                         break;
                     }
@@ -139,17 +140,65 @@ public class FrontServlet extends HttpServlet {
                 return;
             }
 
-            // Execution de la methode trouvee
-            Object[] parameters = getMethodParameters(method, request);
-            Object returnValue = method.invoke(object, parameters);
+            try {
+                // Récupérer les données saisies et les erreurs
+                Map<String, String> formData = new HashMap<>();
+                Map<String, String> fieldErrors = new HashMap<>();
+                boolean hasValidationErrors = false;
 
-            // Gerer la reponse selon le type de retour de la methode
-            if (method.isAnnotationPresent(RestApi.class)) {
-                response.setContentType("application/json");
-                Gson gson = new Gson();
-                out.println(gson.toJson(returnValue));
-            } else {
-                if (returnValue instanceof ModelView) {
+                // Parcourir les paramètres de la méthode pour récupérer et valider les données
+                for (Parameter param : method.getParameters()) {
+                    if (param.isAnnotationPresent(ParamObject.class)) {
+                        Class<?> paramType = param.getType();
+                        for (Field field : paramType.getDeclaredFields()) {
+                            ParamField paramField = field.getAnnotation(ParamField.class);
+                            if (paramField != null) {
+                                String paramName = paramField.value();
+                                String paramValue = request.getParameter(paramName);
+                                formData.put(paramName, paramValue);
+
+                                // Valider le champ
+                                String errer = validateField(field, paramValue);
+                                if (errer != null) {
+                                    fieldErrors.put(paramName, errer);
+                                    hasValidationErrors = true;
+                                    // Ajouter l'erreur directement dans la réponse
+                                    request.setAttribute("fieldErrors", fieldErrors);
+                                    request.setAttribute("formData", formData);
+                                }
+                            }
+                        }
+                    } else if (param.isAnnotationPresent(Param.class)) {
+                        Param paramAnnotation = param.getAnnotation(Param.class);
+                        String paramName = paramAnnotation.value();
+                        String paramValue = request.getParameter(paramName);
+                        formData.put(paramName, paramValue);
+                    }
+                }
+
+                if (hasValidationErrors) {
+                    // Retourner directement les erreurs sans créer de ModelView
+                    response.setContentType("application/json");
+                    Map<String, Object> errorResponse = new HashMap<>();
+                    errorResponse.put("success", false);
+                    errorResponse.put("formData", formData);
+                    errorResponse.put("fieldErrors", fieldErrors);
+
+                    Gson gson = new Gson();
+                    out.println(gson.toJson(errorResponse));
+                    return;
+                }
+
+                // Si pas d'erreurs, exécuter la méthode
+                Object[] parameters = getMethodParameters(method, request);
+                Object returnValue = method.invoke(object, parameters);
+
+                // Gérer la réponse selon le type de retour de la méthode
+                if (method.isAnnotationPresent(RestApi.class)) {
+                    response.setContentType("application/json");
+                    Gson gson = new Gson();
+                    out.println(gson.toJson(returnValue));
+                } else if (returnValue instanceof ModelView) {
                     ModelView modelView = (ModelView) returnValue;
                     for (Map.Entry<String, Object> entry : modelView.getData().entrySet()) {
                         request.setAttribute(entry.getKey(), entry.getValue());
@@ -159,11 +208,24 @@ public class FrontServlet extends HttpServlet {
                 } else {
                     out.println("La methode a renvoye : " + returnValue);
                 }
+            } catch (Exception e) {
+                // Gérer les autres types d'erreurs
+                ModelView errorModelView = new ModelView(request.getRequestURI());
+                Map<String, String> generalErrors = new HashMap<>();
+                generalErrors.put("error", e.getMessage());
+                errorModelView.addItem("generalErrors", generalErrors);
+
+                for (Map.Entry<String, Object> entry : errorModelView.getData().entrySet()) {
+                    request.setAttribute(entry.getKey(), entry.getValue());
+                }
+                RequestDispatcher dispatcher = request.getRequestDispatcher(errorModelView.getUrl());
+                dispatcher.forward(request, response);
             }
         } catch (Exception e) {
             errorCode = 500;
             errorMessage = "Erreur interne du serveur";
-            errorDetails = "Une erreur inattendue s'est produite lors du traitement de votre requete : " + e.getMessage();
+            errorDetails = "Une erreur inattendue s'est produite lors du traitement de votre requete : "
+                    + e.getMessage();
             displayErrorPage(out, errorCode, errorMessage, errorDetails);
         }
     }
@@ -176,7 +238,8 @@ public class FrontServlet extends HttpServlet {
         out.println("<title>Erreur " + errorCode + "</title>");
         out.println("<style>");
         out.println("body { font-family: Arial, sans-serif; color: #333; background-color: #f4f4f4; }");
-        out.println(".container { max-width: 600px; margin: auto; padding: 20px; background-color: #fff; border: 1px solid #ddd; border-radius: 4px; }");
+        out.println(
+                ".container { max-width: 600px; margin: auto; padding: 20px; background-color: #fff; border: 1px solid #ddd; border-radius: 4px; }");
         out.println("h1 { color: #e74c3c; }");
         out.println("p { line-height: 1.5; }");
         out.println("a { color: #3498db; text-decoration: none; }");
@@ -192,7 +255,6 @@ public class FrontServlet extends HttpServlet {
         out.println("</body>");
         out.println("</html>");
     }
-    
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
@@ -243,7 +305,7 @@ public class FrontServlet extends HttpServlet {
                                     if (method.isAnnotationPresent(Url.class)) {
                                         Url urlAnnotation = method.getAnnotation(Url.class);
                                         String url = urlAnnotation.value();
-                                        String verb = "GET"; 
+                                        String verb = "GET";
                                         if (method.isAnnotationPresent(Annotation_Get.class)) {
                                             verb = "GET";
                                         } else if (method.isAnnotationPresent(Annotation_Post.class)) {
@@ -262,13 +324,13 @@ public class FrontServlet extends HttpServlet {
                                             map.setVerbActions(verbAction);
                                             urlMaping.put(url, map);
                                         }
-                                        
-                                    }else{
-                                        throw new Exception("il faut avoir une annotation url dans le controlleur  "+ className);
+
+                                    } else {
+                                        throw new Exception(
+                                                "il faut avoir une annotation url dans le controlleur  " + className);
                                     }
                                 }
-                                
-                                
+
                             }
                         } catch (Exception e) {
                             e.printStackTrace();
@@ -279,10 +341,10 @@ public class FrontServlet extends HttpServlet {
         }
     }
 
-    private void validateField(Field field, String paramValue) throws Exception {
+    private String validateField(Field field, String paramValue) {
         // Vérifier si le champ est annoté avec @NotNull
         if (field.isAnnotationPresent(NotNull.class) && (paramValue == null || paramValue.isEmpty())) {
-            throw new Exception("Le champ " + field.getName() + " ne doit pas être nul.");
+            return "Le champ " + field.getName() + " ne doit pas être nul.";
         }
 
         // Vérifier le type Double
@@ -290,7 +352,7 @@ public class FrontServlet extends HttpServlet {
             try {
                 Double.parseDouble(paramValue);
             } catch (NumberFormatException e) {
-                throw new Exception("Le champ " + field.getName() + " doit être de type double.");
+                return "Le champ " + field.getName() + " doit être de type double.";
             }
         }
 
@@ -299,57 +361,84 @@ public class FrontServlet extends HttpServlet {
             try {
                 Integer.parseInt(paramValue);
             } catch (NumberFormatException e) {
-                throw new Exception("Le champ " + field.getName() + " doit être de type int.");
+                return "Le champ " + field.getName() + " doit être de type int.";
             }
         }
 
         // Vérifier le type String
         if (field.isAnnotationPresent(StringType.class)) {
             if (!(paramValue instanceof String)) {
-                throw new Exception("Le champ " + field.getName() + " doit être de type String.");
+                return "Le champ " + field.getName() + " doit être de type String.";
             }
         }
+
+        return null; // Aucune erreur
     }
 
+    public static Object convertParameter(String value, Class<?> type) {
+        System.out.println("=== Conversion de paramètre ===");
+        System.out.println("Valeur reçue: " + value);
+        System.out.println("Type cible: " + type);
 
-  public static Object convertParameter(String value, Class<?> type) {
-        if (value == null) {
+        if (value == null || value.trim().isEmpty()) {
+            System.out.println("Valeur null ou vide, retourne null");
             return null;
         }
-        if (type == String.class) {
-            return value;
-        } else if (type == int.class || type == Integer.class) {
-            return Integer.parseInt(value);
-        } else if (type == long.class || type == Long.class) {
-            return Long.parseLong(value);
-        } else if (type == boolean.class || type == Boolean.class) {
-            return Boolean.parseBoolean(value);
+
+        try {
+            if (type == String.class) {
+                return value;
+            } else if (type == Integer.class || type == int.class) {
+                return Integer.parseInt(value);
+            } else if (type == Double.class || type == double.class) {
+                return Double.parseDouble(value);
+            } else if (type == java.sql.Date.class) {
+                try {
+                    System.out.println("Tentative de conversion en Date SQL: " + value);
+                    // Convertir d'abord en java.util.Date
+                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+                    java.util.Date utilDate = sdf.parse(value);
+                    // Puis en java.sql.Date
+                    java.sql.Date sqlDate = new java.sql.Date(utilDate.getTime());
+                    System.out.println("Date convertie avec succès: " + sqlDate);
+                    return sqlDate;
+                } catch (Exception e) {
+                    System.out.println("Erreur lors de la conversion de la date: " + e.getMessage());
+                    e.printStackTrace();
+                    return null;
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur de conversion: " + e.getMessage());
+            e.printStackTrace();
+            return null;
         }
-        // Ajoutez d'autres conversions necessaires ici
+
+        System.out.println("Type non géré: " + type);
         return null;
     }
 
-    private Object[] getMethodParameters(Method method, HttpServletRequest request)throws Exception {
+    private Object[] getMethodParameters(Method method, HttpServletRequest request) throws Exception {
         Parameter[] parameters = method.getParameters();
         Object[] parameterValues = new Object[parameters.length];
 
         for (int i = 0; i < parameters.length; i++) {
-            
+
             if (parameters[i].isAnnotationPresent(Param.class)) {
                 Param param = parameters[i].getAnnotation(Param.class);
                 String paramValue = request.getParameter(param.value());
-                if(parameters[i].getType().equals(Part.class)){
-                    Part filePart = request.getPart(param.value()); 
+                if (parameters[i].getType().equals(Part.class)) {
+                    Part filePart = request.getPart(param.value());
                     String fileName = filePart.getSubmittedFileName();
                     String filePath = "D:/ITU/S4/Mr_Naina/files_Upload/" + fileName;
-            
+
                     // Enregistrer le fichier sur le serveur
                     try (InputStream fileContent = filePart.getInputStream();
-                         FileOutputStream fos = new FileOutputStream(new File(filePath))) {
-                         
+                            FileOutputStream fos = new FileOutputStream(new File(filePath))) {
+
                         byte[] buffer = new byte[1024];
                         int bytesRead;
-                        
+
                         while ((bytesRead = fileContent.read(buffer)) != -1) {
                             fos.write(buffer, 0, bytesRead);
                         }
@@ -357,42 +446,49 @@ public class FrontServlet extends HttpServlet {
                         e.printStackTrace();
                     }
                     parameterValues[i] = filePart;
-                }else{
-                    parameterValues[i] = convertParameter(paramValue, parameters[i].getType()); // Assuming all parameters are strings for simplicity
+                } else {
+                    parameterValues[i] = convertParameter(paramValue, parameters[i].getType());
                 }
-            }
-            // Verifie si le parametre est annote avec @RequestObject
-            else if (parameters[i].isAnnotationPresent(ParamObject.class)) {
-                Class<?> parameterType = parameters[i].getType();  // Recupere le type du parametre (le type de l'objet a creer)
-                Object parameterObject = parameterType.getDeclaredConstructor().newInstance();  // Cree une nouvelle instance de cet objet
-    
+            } else if (parameters[i].isAnnotationPresent(ParamObject.class)) { // Verifie si le parametre est annote
+                                                                               // avec @RequestObject // Verifie si le
+                                                                               // parametre est annote avec
+                                                                               // @RequestObject
+                Class<?> parameterType = parameters[i].getType(); // Recupere le type du parametre (le type de l'objet a
+                                                                  // creer)
+                Object parameterObject = parameterType.getDeclaredConstructor().newInstance(); // Cree une nouvelle
+                                                                                               // instance de cet objet
+
                 // Parcourt tous les champs (fields) de l'objet
                 for (Field field : parameterType.getDeclaredFields()) {
                     ParamField param = field.getAnnotation(ParamField.class);
-                    String fieldName = field.getName();  // Recupere le nom du champ
+                    String fieldName = field.getName(); // Recupere le nom du champ
                     if (param == null) {
-                        throw new Exception("Etu002748 ,l'attribut " + fieldName +" dans le classe "+parameterObject.getClass().getSimpleName()+" n'a pas d'annotation ParamField "); 
-                    }  
+                        throw new Exception("Etu002748 ,l'attribut " + fieldName + " dans le classe "
+                                + parameterObject.getClass().getSimpleName() + " n'a pas d'annotation ParamField ");
+                    }
                     String paramName = param.value();
-                    String paramValue = request.getParameter(paramName);  // Recupere la valeur du parametre de la requete                      
-                    
-                    // Verifie si la valeur du parametre n'est pas null (si elle est trouvee dans la requete)
+                    String paramValue = request.getParameter(paramName); // Recupere la valeur du parametre de la
+                                                                         // requete
+
+                    // Verifie si la valeur du parametre n'est pas null (si elle est trouvee dans la
+                    // requete)
                     if (paramValue != null) {
-                        validateField(field, paramValue); 
-                        Object convertedValue = convertParameter(paramValue, field.getType());  // Convertit la valeur de la requete en type de champ requis
-                        
+                        validateField(field, paramValue);
+                        Object convertedValue = convertParameter(paramValue, field.getType()); // Convertit la valeur de
+                                                                                               // la requete en type de
+                                                                                               // champ requis
+
                         // Construit le nom du setter
                         String setterName = "set" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
-                        Method setter = parameterType.getMethod(setterName, field.getType());  // Recupere la methode setter correspondante
-                        setter.invoke(parameterObject, convertedValue);  // Appelle le setter pour definir la valeur convertie dans le champ de l'objet
-                    }                                                   
+                        Method setter = parameterType.getMethod(setterName, field.getType()); // Recupere la methode
+                                                                                              // setter correspondante
+                        setter.invoke(parameterObject, convertedValue); // Appelle le setter pour definir la valeur
+                                                                        // convertie dans le champ de l'objet
+                    }
                 }
-                parameterValues[i] = parameterObject;  // Stocke l'objet cree dans le tableau des arguments
-            }else if (parameters[i].isAnnotationPresent(InjectSession.class)) {
+                parameterValues[i] = parameterObject; // Stocke l'objet cree dans le tableau des arguments
+            } else if (parameters[i].isAnnotationPresent(InjectSession.class)) {
                 parameterValues[i] = new CustomSession(request.getSession());
-            }
-            else{
-
             }
         }
 

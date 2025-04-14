@@ -73,7 +73,7 @@ public class FrontServlet extends HttpServlet {
     }
 
     protected void processRequest(HttpServletRequest request, HttpServletResponse response)
-        throws Exception {
+            throws Exception {
         StringBuffer requestURL = request.getRequestURL();
         String[] requestUrlSplitted = requestURL.toString().split("/");
         String controllerSearched = requestUrlSplitted[requestUrlSplitted.length - 1];
@@ -121,7 +121,8 @@ public class FrontServlet extends HttpServlet {
             // Verification de l'existence de la methode correspondante
             for (Method m : clazz.getDeclaredMethods()) {
                 for (VerbAction action : mapping.getVerbActions()) {
-                    if (m.getName().equals(action.getMethodeName()) && action.getVerb().equalsIgnoreCase(request.getMethod())) {
+                    if (m.getName().equals(action.getMethodeName())
+                            && action.getVerb().equalsIgnoreCase(request.getMethod())) {
                         method = m;
                         break;
                     }
@@ -163,7 +164,8 @@ public class FrontServlet extends HttpServlet {
         } catch (Exception e) {
             errorCode = 500;
             errorMessage = "Erreur interne du serveur";
-            errorDetails = "Une erreur inattendue s'est produite lors du traitement de votre requete : " + e.getMessage();
+            errorDetails = "Une erreur inattendue s'est produite lors du traitement de votre requete : "
+                    + e.getMessage();
             displayErrorPage(out, errorCode, errorMessage, errorDetails);
         }
     }
@@ -176,7 +178,8 @@ public class FrontServlet extends HttpServlet {
         out.println("<title>Erreur " + errorCode + "</title>");
         out.println("<style>");
         out.println("body { font-family: Arial, sans-serif; color: #333; background-color: #f4f4f4; }");
-        out.println(".container { max-width: 600px; margin: auto; padding: 20px; background-color: #fff; border: 1px solid #ddd; border-radius: 4px; }");
+        out.println(
+                ".container { max-width: 600px; margin: auto; padding: 20px; background-color: #fff; border: 1px solid #ddd; border-radius: 4px; }");
         out.println("h1 { color: #e74c3c; }");
         out.println("p { line-height: 1.5; }");
         out.println("a { color: #3498db; text-decoration: none; }");
@@ -192,7 +195,6 @@ public class FrontServlet extends HttpServlet {
         out.println("</body>");
         out.println("</html>");
     }
-    
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
@@ -243,7 +245,7 @@ public class FrontServlet extends HttpServlet {
                                     if (method.isAnnotationPresent(Url.class)) {
                                         Url urlAnnotation = method.getAnnotation(Url.class);
                                         String url = urlAnnotation.value();
-                                        String verb = "GET"; 
+                                        String verb = "GET";
                                         if (method.isAnnotationPresent(Annotation_Get.class)) {
                                             verb = "GET";
                                         } else if (method.isAnnotationPresent(Annotation_Post.class)) {
@@ -262,13 +264,13 @@ public class FrontServlet extends HttpServlet {
                                             map.setVerbActions(verbAction);
                                             urlMaping.put(url, map);
                                         }
-                                        
-                                    }else{
-                                        throw new Exception("il faut avoir une annotation url dans le controlleur  "+ className);
+
+                                    } else {
+                                        throw new Exception(
+                                                "il faut avoir une annotation url dans le controlleur  " + className);
                                     }
                                 }
-                                
-                                
+
                             }
                         } catch (Exception e) {
                             e.printStackTrace();
@@ -311,8 +313,7 @@ public class FrontServlet extends HttpServlet {
         }
     }
 
-
-  public static Object convertParameter(String value, Class<?> type) {
+    public static Object convertParameter(String value, Class<?> type) {
         if (value == null) {
             return null;
         }
@@ -329,27 +330,27 @@ public class FrontServlet extends HttpServlet {
         return null;
     }
 
-    private Object[] getMethodParameters(Method method, HttpServletRequest request)throws Exception {
+    private Object[] getMethodParameters(Method method, HttpServletRequest request) throws Exception {
         Parameter[] parameters = method.getParameters();
         Object[] parameterValues = new Object[parameters.length];
 
         for (int i = 0; i < parameters.length; i++) {
-            
+
             if (parameters[i].isAnnotationPresent(Param.class)) {
                 Param param = parameters[i].getAnnotation(Param.class);
                 String paramValue = request.getParameter(param.value());
-                if(parameters[i].getType().equals(Part.class)){
-                    Part filePart = request.getPart(param.value()); 
+                if (parameters[i].getType().equals(Part.class)) {
+                    Part filePart = request.getPart(param.value());
                     String fileName = filePart.getSubmittedFileName();
                     String filePath = "D:/ITU/S4/Mr_Naina/files_Upload/" + fileName;
-            
+
                     // Enregistrer le fichier sur le serveur
                     try (InputStream fileContent = filePart.getInputStream();
-                         FileOutputStream fos = new FileOutputStream(new File(filePath))) {
-                         
+                            FileOutputStream fos = new FileOutputStream(new File(filePath))) {
+
                         byte[] buffer = new byte[1024];
                         int bytesRead;
-                        
+
                         while ((bytesRead = fileContent.read(buffer)) != -1) {
                             fos.write(buffer, 0, bytesRead);
                         }
@@ -357,41 +358,52 @@ public class FrontServlet extends HttpServlet {
                         e.printStackTrace();
                     }
                     parameterValues[i] = filePart;
-                }else{
-                    parameterValues[i] = convertParameter(paramValue, parameters[i].getType()); // Assuming all parameters are strings for simplicity
+                } else {
+                    parameterValues[i] = convertParameter(paramValue, parameters[i].getType()); // Assuming all
+                                                                                                // parameters are
+                                                                                                // strings for
+                                                                                                // simplicity
                 }
             }
             // Verifie si le parametre est annote avec @RequestObject
             else if (parameters[i].isAnnotationPresent(ParamObject.class)) {
-                Class<?> parameterType = parameters[i].getType();  // Recupere le type du parametre (le type de l'objet a creer)
-                Object parameterObject = parameterType.getDeclaredConstructor().newInstance();  // Cree une nouvelle instance de cet objet
-    
+                Class<?> parameterType = parameters[i].getType(); // Recupere le type du parametre (le type de l'objet a
+                                                                  // creer)
+                Object parameterObject = parameterType.getDeclaredConstructor().newInstance(); // Cree une nouvelle
+                                                                                               // instance de cet objet
+
                 // Parcourt tous les champs (fields) de l'objet
                 for (Field field : parameterType.getDeclaredFields()) {
                     ParamField param = field.getAnnotation(ParamField.class);
-                    String fieldName = field.getName();  // Recupere le nom du champ
+                    String fieldName = field.getName(); // Recupere le nom du champ
                     if (param == null) {
-                        throw new Exception("Etu002748 ,l'attribut " + fieldName +" dans le classe "+parameterObject.getClass().getSimpleName()+" n'a pas d'annotation ParamField "); 
-                    }  
+                        throw new Exception("Etu002748 ,l'attribut " + fieldName + " dans le classe "
+                                + parameterObject.getClass().getSimpleName() + " n'a pas d'annotation ParamField ");
+                    }
                     String paramName = param.value();
-                    String paramValue = request.getParameter(paramName);  // Recupere la valeur du parametre de la requete                      
-                    
-                    // Verifie si la valeur du parametre n'est pas null (si elle est trouvee dans la requete)
+                    String paramValue = request.getParameter(paramName); // Recupere la valeur du parametre de la
+                                                                         // requete
+
+                    // Verifie si la valeur du parametre n'est pas null (si elle est trouvee dans la
+                    // requete)
                     if (paramValue != null) {
-                        validateField(field, paramValue); 
-                        Object convertedValue = convertParameter(paramValue, field.getType());  // Convertit la valeur de la requete en type de champ requis
-                        
+                        validateField(field, paramValue);
+                        Object convertedValue = convertParameter(paramValue, field.getType()); // Convertit la valeur de
+                                                                                               // la requete en type de
+                                                                                               // champ requis
+
                         // Construit le nom du setter
                         String setterName = "set" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
-                        Method setter = parameterType.getMethod(setterName, field.getType());  // Recupere la methode setter correspondante
-                        setter.invoke(parameterObject, convertedValue);  // Appelle le setter pour definir la valeur convertie dans le champ de l'objet
-                    }                                                   
+                        Method setter = parameterType.getMethod(setterName, field.getType()); // Recupere la methode
+                                                                                              // setter correspondante
+                        setter.invoke(parameterObject, convertedValue); // Appelle le setter pour definir la valeur
+                                                                        // convertie dans le champ de l'objet
+                    }
                 }
-                parameterValues[i] = parameterObject;  // Stocke l'objet cree dans le tableau des arguments
-            }else if (parameters[i].isAnnotationPresent(InjectSession.class)) {
+                parameterValues[i] = parameterObject; // Stocke l'objet cree dans le tableau des arguments
+            } else if (parameters[i].isAnnotationPresent(InjectSession.class)) {
                 parameterValues[i] = new CustomSession(request.getSession());
-            }
-            else{
+            } else {
 
             }
         }

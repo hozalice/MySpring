@@ -1,6 +1,7 @@
 package mg.itu.prom16.map;
 
 import java.util.HashMap;
+import java.util.Map;
 
 public class ModelView {
     private String url;
@@ -12,6 +13,10 @@ public class ModelView {
     }
 
     public void addObject(String name, Object value) {
+        data.put(name, value);
+    }
+
+    public void addItem(String name, Map<String, String> value) {
         data.put(name, value);
     }
 
